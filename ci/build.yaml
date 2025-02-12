@@ -5,46 +5,44 @@ trigger:
       - staging
       - developer
       - feature/*
-  paths:
-    include:
-      - src/
 
 pool:
   vmImage: 'ubuntu-latest'
 
 variables:
-  node_version: '18.x'
-  build_configuration: 'production'
-  angular_project: 'angular-ui'
+  buildConfiguration: 'Release'
+  dotnetVersion: '6.0.x'
+  azureSubscription: 'AzureSubscription'
+  webAppName: 'WebApi'
 
-steps:
-  - task: NodeTool@0
-    displayName: 'Install Node.js $(node_version)'
-    inputs:
-      versionSpec: $(node_version)
+stages:
+  - stage: Build
+    displayName: 'Build e Tests'
+    jobs:
+      - job: Build
+        displayName: 'Compile e Test .NET Core'
+        steps:
+          - task: UseDotNet@2
+            displayName: 'Install .NET SDK $(dotnetVersion)'
+            inputs:
+              packageType: 'sdk'
+              version: '$(dotnetVersion)'
+              installationPath: $(Agent.ToolsDirectory)/dotnet
 
-  - script: npm ci
-    displayName: "Install dependencies"
+          - script: dotnet restore
+            displayName: 'Restore Dependencies'
 
-  - script: npm run lint
-    displayName: "Exec Linter"
+          - script: dotnet build --configuration $(buildConfiguration) --no-restore
+            displayName: 'Compile App'
 
-  - script: npm run test -- --watch=false --browsers=ChromeHeadless
-    displayName: "Exec Unit Tests"
+          - script: dotnet test --configuration $(buildConfiguration) --no-build --verbosity normal
+            displayName: 'Exec Unit Testes'
 
-  - script: npm run build
-    displayName: "Compile"
+          - script: dotnet publish -c $(buildConfiguration) -o $(Build.ArtifactStagingDirectory)
+            displayName: 'Publish Artifacts'
 
-  - task: CopyFiles@2
-    displayName: 'Copy files to artifacts folder'
-    inputs:
-      SourceFolder: 'dist/$(angular_project)' 
-      Contents: '**'
-      TargetFolder: '$(Build.ArtifactStagingDirectory)'
-
-  - task: PublishBuildArtifacts@1
-    displayName: 'Public Artifacts'
-    inputs:
-      pathToPublish: '$(Build.ArtifactStagingDirectory)' 
-      artifactName: 'drop'
-
+          - task: PublishBuildArtifacts@1
+            displayName: 'Save Artifacts'
+            inputs:
+              pathToPublish: $(Build.ArtifactStagingDirectory)
+              artifactName: drop
